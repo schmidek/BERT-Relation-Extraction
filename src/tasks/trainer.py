@@ -17,6 +17,7 @@ from ..misc import save_as_pickle, load_pickle
 import matplotlib.pyplot as plt
 import time
 import logging
+import torch.onnx
 
 logging.basicConfig(format='%(asctime)s [%(levelname)s]: %(message)s', \
                     datefmt='%m/%d/%Y %I:%M:%S %p', level=logging.INFO)
@@ -193,5 +194,27 @@ def train_and_fit(args):
     ax3.set_ylabel("Test F1 Accuracy", fontsize=22)
     ax3.set_title("Test F1 vs Epoch", fontsize=32)
     plt.savefig(os.path.join("./data/" ,"task_test_f1_vs_epoch_%d.png" % args.model_no))
+
+    # TODO option to load best
+    #net.eval()
+    evaluate_results(net, test_loader, pad_id, cuda)
+    # Export the model
+    input_ids = torch.zeros((1, 150)).long().cuda()
+    token_type_ids = torch.zeros((1, 150)).long().cuda()
+    attention_mask = torch.zeros((1, 150)).long().cuda()
+    e1_e2_start = torch.zeros((1, 2)).long().cuda()
+    torch.onnx.export(net,               # model being run
+                    (input_ids, attention_mask, token_type_ids, e1_e2_start),                         # model input (or a tuple for multiple inputs)
+                    "model.onnx",   # where to save the model (can be a file or file-like object)
+                    export_params=True,        # store the trained parameter weights inside the model file
+                    opset_version=10,          # the ONNX version to export the model to
+                    do_constant_folding=True,  # whether to execute constant folding for optimization
+                    input_names = ['input_ids', 'attention_mask', 'token_type_ids', 'e1_e2_start'],   # the model's input names
+                    output_names = ['output'] # the model's output names
+                    dynamic_axes={'input_ids' : {0 : 'batch_size', 1: 'sequence_size'},    # variable lenght axes
+                                  'token_type_ids' : {0 : 'batch_size', 1: 'sequence_size'},
+                                  'attention_mask' : {0 : 'batch_size', 1: 'sequence_size'},
+                                  'e1_e2_start' : {0 : 'batch_size'},
+                                  'output' : {0 : 'batch_size'}})
     
     return net

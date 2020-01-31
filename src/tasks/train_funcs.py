@@ -10,7 +10,7 @@ import math
 import torch
 import torch.nn as nn
 from ..misc import save_as_pickle, load_pickle
-from seqeval.metrics import precision_score, recall_score, f1_score
+from seqeval.metrics import precision_score, recall_score, f1_score, classification_report
 import logging
 from tqdm import tqdm
 
@@ -97,6 +97,7 @@ def evaluate_results(net, test_loader, pad_id, cuda):
             acc += accuracy
     
     accuracy = acc/(i + 1)
+    print(classification_report(true_labels, out_labels))
     results = {
         "accuracy": accuracy,
         "precision": precision_score(true_labels, out_labels),

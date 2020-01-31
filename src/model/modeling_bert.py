@@ -640,9 +640,9 @@ class BertModel(BertPreTrainedModel):
         for layer, heads in heads_to_prune.items():
             self.encoder.layer[layer].attention.prune_heads(heads)
 
-    def forward(self, input_ids=None, attention_mask=None, token_type_ids=None, position_ids=None,
+    def forward(self, input_ids=None, attention_mask=None, token_type_ids=None, e1_e2_start=None, position_ids=None,
                 head_mask=None, inputs_embeds=None, encoder_hidden_states=None, encoder_attention_mask=None, \
-                Q=None, e1_e2_start=None):
+                Q=None):
         """ Forward pass on the Model.
 
         The model can behave as an encoder (with only self-attention) as well
