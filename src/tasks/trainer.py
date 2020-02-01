@@ -12,7 +12,7 @@ import torch.optim as optim
 from torch.nn.utils import clip_grad_norm_
 from ..model.modeling_bert import BertModel
 from .preprocessing_funcs import load_dataloaders
-from .train_funcs import load_state, load_results, evaluate_, evaluate_results
+from .train_funcs import load_state, load_results, evaluate_, evaluate_results, criterion
 from ..misc import save_as_pickle, load_pickle
 import matplotlib.pyplot as plt
 import time
@@ -63,7 +63,6 @@ def train_and_fit(args):
         net.load_state_dict(pretrained_dict, strict=False)
         del checkpoint, pretrained_dict, model_dict
     
-    criterion = nn.CrossEntropyLoss(ignore_index=-1)
     optimizer = optim.Adam([{"params":net.parameters(), "lr": args.lr}])
     
     scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[2,4,6,8,12,15,18,20,22,\
@@ -123,8 +122,7 @@ def train_and_fit(args):
                 optimizer.zero_grad()
             
             total_loss += loss.item()
-            total_acc += evaluate_(classification_logits, labels, \
-                                   ignore_idx=-1)[0]
+            total_acc += evaluate_(classification_logits, labels.squeeze(1))
             
             if (i % update_size) == (update_size - 1):
                 losses_per_batch.append(args.gradient_acc_steps*total_loss/update_size)
@@ -134,21 +132,23 @@ def train_and_fit(args):
                 total_loss = 0.0; total_acc = 0.0
         
         scheduler.step()
-        results = evaluate_results(net, test_loader, pad_id, cuda)
+        results = evaluate_results(net, test_loader, pad_id, cuda, args.num_classes)
         losses_per_epoch.append(sum(losses_per_batch)/len(losses_per_batch))
         accuracy_per_epoch.append(sum(accuracy_per_batch)/len(accuracy_per_batch))
         test_f1_per_epoch.append(results['f1'])
         print("Epoch finished, took %.2f seconds." % (time.time() - start_time))
         print("Losses at Epoch %d: %.7f" % (epoch + 1, losses_per_epoch[-1]))
+        print("val loss at Epoch %d: %.7f" % (epoch + 1, results['loss']))
         print("Train accuracy at Epoch %d: %.7f" % (epoch + 1, accuracy_per_epoch[-1]))
         print("Test f1 at Epoch %d: %.7f" % (epoch + 1, test_f1_per_epoch[-1]))
         
-        if accuracy_per_epoch[-1] > best_pred:
-            best_pred = accuracy_per_epoch[-1]
+        if results['loss'] < best_pred:
+            best_pred = results['loss']
             torch.save({
                     'epoch': epoch + 1,\
                     'state_dict': net.state_dict(),\
-                    'best_acc': accuracy_per_epoch[-1],\
+                    'best_acc': results['f1'],\
+                    'best_loss': results['loss'],\
                     'optimizer' : optimizer.state_dict(),\
                     'scheduler' : scheduler.state_dict(),\
                     'amp': amp.state_dict() if amp is not None else amp
@@ -161,7 +161,8 @@ def train_and_fit(args):
             torch.save({
                     'epoch': epoch + 1,\
                     'state_dict': net.state_dict(),\
-                    'best_acc': accuracy_per_epoch[-1],\
+                    'best_acc': results['f1'],\
+                    'best_loss': results['loss'],\
                     'optimizer' : optimizer.state_dict(),\
                     'scheduler' : scheduler.state_dict(),\
                     'amp': amp.state_dict() if amp is not None else amp
@@ -197,7 +198,7 @@ def train_and_fit(args):
 
     # TODO option to load best
     #net.eval()
-    evaluate_results(net, test_loader, pad_id, cuda)
+    evaluate_results(net, test_loader, pad_id, cuda, num_classes)
     # Export the model
     input_ids = torch.zeros((1, 150)).long().cuda()
     token_type_ids = torch.zeros((1, 150)).long().cuda()
@@ -210,7 +211,7 @@ def train_and_fit(args):
                     opset_version=10,          # the ONNX version to export the model to
                     do_constant_folding=True,  # whether to execute constant folding for optimization
                     input_names = ['input_ids', 'attention_mask', 'token_type_ids', 'e1_e2_start'],   # the model's input names
-                    output_names = ['output'] # the model's output names
+                    output_names = ['output'], # the model's output names
                     dynamic_axes={'input_ids' : {0 : 'batch_size', 1: 'sequence_size'},    # variable lenght axes
                                   'token_type_ids' : {0 : 'batch_size', 1: 'sequence_size'},
                                   'attention_mask' : {0 : 'batch_size', 1: 'sequence_size'},

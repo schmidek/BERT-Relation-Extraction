@@ -65,30 +65,13 @@ def preprocess_semeval2010_8(args):
     sents, relations, comments, blanks = process_text(text, 'test')
     df_test = pd.DataFrame(data={'sents': sents, 'relations': relations})
     
-    rm = Relations_Mapper(df_train['relations'])
-    save_as_pickle('relations.pkl', rm)
-    df_test['relations_id'] = df_test.progress_apply(lambda x: rm.rel2idx[x['relations']], axis=1)
-    df_train['relations_id'] = df_train.progress_apply(lambda x: rm.rel2idx[x['relations']], axis=1)
+    df_test['relations_id'] = df_test.progress_apply(lambda x: [ int(l) for l in x['relations'].split()], axis=1)
+    df_train['relations_id'] = df_train.progress_apply(lambda x: [ int(l) for l in x['relations'].split()], axis=1)
     save_as_pickle('df_train.pkl', df_train)
     save_as_pickle('df_test.pkl', df_test)
     logger.info("Finished and saved!")
     
-    return df_train, df_test, rm
-
-class Relations_Mapper(object):
-    def __init__(self, relations):
-        self.rel2idx = {}
-        self.idx2rel = {}
-        
-        logger.info("Mapping relations to IDs...")
-        self.n_classes = 0
-        for relation in tqdm(relations):
-            if relation not in self.rel2idx.keys():
-                self.rel2idx[relation] = self.n_classes
-                self.n_classes += 1
-        
-        for key, value in self.rel2idx.items():
-            self.idx2rel[value] = key
+    return df_train, df_test
 
 class Pad_Sequence():
     """
@@ -158,12 +141,11 @@ def load_dataloaders(args):
     train_path = './data/df_train.pkl'
     test_path = './data/df_test.pkl'
     if os.path.isfile(relations_path) and os.path.isfile(train_path) and os.path.isfile(test_path):
-        rm = load_pickle('relations.pkl')
         df_train = load_pickle('df_train.pkl')
         df_test = load_pickle('df_test.pkl')
         logger.info("Loaded preproccessed data.")
     else:
-        df_train, df_test, rm = preprocess_semeval2010_8(args)
+        df_train, df_test = preprocess_semeval2010_8(args)
     
     e1_id = tokenizer.convert_tokens_to_ids('[E1]')
     e2_id = tokenizer.convert_tokens_to_ids('[E2]')
