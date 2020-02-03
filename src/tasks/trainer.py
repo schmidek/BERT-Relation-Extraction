@@ -198,7 +198,7 @@ def train_and_fit(args):
 
     # TODO option to load best
     #net.eval()
-    evaluate_results(net, test_loader, pad_id, cuda, num_classes)
+    evaluate_results(net, test_loader, pad_id, cuda, args.num_classes)
     # Export the model
     input_ids = torch.zeros((1, 150)).long().cuda()
     token_type_ids = torch.zeros((1, 150)).long().cuda()

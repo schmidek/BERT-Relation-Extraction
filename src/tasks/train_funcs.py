@@ -76,6 +76,7 @@ def criterion(logits, labels):
     #print("labels", labels)
     mask = ~torch.eq(labels, torch.tensor(-1.0))
     #print("mask", mask)
+
     masked_logits = torch.masked_select(logits, mask)
     masked_labels = torch.masked_select(labels, mask).double()
     ret = bce(masked_logits, masked_labels)
@@ -106,7 +107,7 @@ def evaluate_results(net, test_loader, pad_id, cuda, num_classes):
             out_labels.extend(torch.sigmoid(classification_logits).cpu().numpy())
             true_labels.extend(labels.squeeze(1).cpu().numpy())
             acc += accuracy
-            loss += criterion(classification_logits, labels.squeeze(1))
+            loss += criterion(classification_logits, labels.squeeze(1)).item()
 
     #print(out_labels)
     tp_total = 0
@@ -117,7 +118,10 @@ def evaluate_results(net, test_loader, pad_id, cuda, num_classes):
         labels = list(map(lambda x: x[c], true_labels))
         #print(prediction_scores)
         #print(labels)
-        sorted_results = sorted(zip(prediction_scores, labels), key=lambda tup: tup[0], reverse=True)
+
+        #filter out unknowns and sort by desc score
+        sorted_results = sorted(filter(lambda x: x[1] != -1,zip(prediction_scores, labels)), key=lambda tup: tup[0], reverse=True)
+        #print(sorted_results)
 
         best_fscore = 0.0
         best_threshold = 0.95
@@ -137,8 +141,6 @@ def evaluate_results(net, test_loader, pad_id, cuda, num_classes):
             threshold = r[0]
             label = r[1]
 
-            if label == -1: #unknown
-                continue
             if label == 1:
                 tp += 1
                 fn -= 1
@@ -168,7 +170,7 @@ def evaluate_results(net, test_loader, pad_id, cuda, num_classes):
         tp_total += tp_at_best
         fn_total += fn_at_best
         fp_total += fp_at_best
-        print(c, threshold, precision_at_best, recall_at_best, fscore_at_best)
+        print(c, best_threshold, precision_at_best, recall_at_best, fscore_at_best)
 
     accuracy = acc/(i + 1)
     precision = tp_total / (tp_total+fp_total)
